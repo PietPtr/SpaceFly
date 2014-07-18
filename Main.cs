@@ -24,9 +24,11 @@ namespace SpaceFly
         Texture2D starsPic;
         Texture2D firePic;
         Texture2D rockPic;
+        Texture2D rockPicdmg1;
+        Texture2D rockPicdmg2;
 
         //Spaceship vectors and other variables
-        Vector2 position = new Vector2(400, 240);
+        Vector2 position;
         Vector2 velocity;
 
         double angle = Math.PI / 2;
@@ -34,22 +36,164 @@ namespace SpaceFly
         float length;
 
         //Constants
-        int MAXSPEED = 8;
-        double ACCELERATION = 0.05;
-        double BRAKES = 0.1;
-        double TURNSPEED = 0.1;
+        const int MAXSPEED = 8;
+        const double ACCELERATION = 0.05;
+        const double BRAKES = 0.1;
+        const double TURNSPEED = 0.1;
 
-        int SCREENWIDTH = 1888;
-        int SCREENHEIGHT = 992;
+        const int SCREENWIDTH = 1888;
+        const int SCREENHEIGHT = 992;
 
-        //World matrix
+        const int GENERATIONREACH = 1;
+
+        //Fireball variables
+        double bulletSpread = 20;
+
+        //World matrix and list to hold existing rocks
         Rock[,] worldGrid = new Rock[118, 62];
+        List<Vector2> rockList = new List<Vector2>();
 
         //Random number generator
-        static Random rnd = new Random(987);
+        static Random random = new Random();
 
         //List with fireballs
         List<Fireball> fireList = new List<Fireball>();
+
+        //Hold the state of the keyboard 1 frame ago
+        KeyboardState oldKeyboardState;
+        MouseState oldMouseState;
+
+        //Hold the font
+        SpriteFont font;
+
+        public int randomInt(int low, int high)
+        {
+            int randomInteger = random.Next(low, high + 1);
+            return randomInteger;
+        }
+
+        public void changeBlockCheck(int x, int y, int deltaX, int deltaY)
+        {
+            if (randomInt(0, 1) == 1)
+            {
+                worldGrid[x + deltaX, y + deltaY].destroyed = false;
+                worldGrid[x + deltaX, y + deltaY].health = 10;
+
+                rockList.Add(new Vector2(x + deltaX, y + deltaY));
+            }
+        }
+
+        public void Generator()
+        {
+            //Select a random position to place the starting block.
+            Vector2 randomPos = new Vector2(randomInt(1, 117), randomInt(1, 61));
+
+            //make the block visible
+            worldGrid[(int)randomPos.X, (int)randomPos.Y].destroyed = false;
+            worldGrid[(int)randomPos.X, (int)randomPos.Y].health = 10;
+            rockList.Add(randomPos);
+
+            //limits the amount of rocks generated
+            for (int i = 0; i < GENERATIONREACH; i++)
+            {
+                //Loop through the worldGrid matrix
+                for (int listCount = rockList.Count - 1; listCount >= 0; listCount--)
+                {
+                    //coords in small vars for faster coding
+                    int x = (int)rockList[listCount].X;
+                    int y = (int)rockList[listCount].Y;
+
+                    try
+                    {
+                        if (worldGrid[x, y].destroyed == false)
+                        {
+                            if (worldGrid[x + 1, y].destroyed == true)
+                            {
+                                changeBlockCheck(x, y, 1, 0);
+                            }
+                            else if (worldGrid[x - 1, y].destroyed == true)
+                            {
+                                changeBlockCheck(x, y, -1, 0);
+                            }
+                            else if (worldGrid[x, y + 1].destroyed == true)
+                            {
+                                changeBlockCheck(x, y, 0, 1);
+                            }
+                            else if (worldGrid[x, y - 1].destroyed == true)
+                            {
+                                changeBlockCheck(x, y, 0, -1);
+                            }
+                        }
+                    }
+                    catch (System.IndexOutOfRangeException)
+                    {
+                        continue;
+                    }
+                }
+                Console.Write(".");
+            }
+            Console.Write(" done!");
+        }
+
+        //Remove holes
+        public void Smooth()
+        {
+            Console.Write("\nLOADING");
+
+            //Loop through every block in the map matrix
+            for (int x = 0; x < worldGrid.GetLength(0); x++)
+            {
+                for (int y = 0; y < worldGrid.GetLength(1); y++)
+                {
+                    if (worldGrid[x, y].destroyed == true)
+                    {
+                        int surroundCount = 0;
+
+                        try
+                        {
+                            if (worldGrid[x + 1, y].destroyed == false)
+                            {
+                                surroundCount++;
+                            }
+                            else if (worldGrid[x - 1, y].destroyed == false)
+                            {
+                                surroundCount++;
+                            }
+                            else if (worldGrid[x, y + 1].destroyed == false)
+                            {
+                                surroundCount++;
+                            }
+                            else if (worldGrid[x, y - 1].destroyed == false)
+                            {
+                                surroundCount++;
+                            }
+                        }
+                        catch (System.IndexOutOfRangeException)
+                        {
+                            continue;
+                        }
+
+                        if (surroundCount >= 4)
+                        {
+                            worldGrid[x, y].destroyed = false;
+                            worldGrid[x, y].health = 10;
+                        }
+                    }
+                }
+            }
+        }
+
+        public void fillWorldGrid()
+        {
+            //Create the rock objects
+            for (int x = 0; x < worldGrid.GetLength(0); x++)
+            {
+                for (int y = 0; y < worldGrid.GetLength(1); y++)
+                {
+                    worldGrid[x, y] = new Rock(new Vector2(x * 16, y * 16), 0, true);
+                }
+            }
+        }
 
         public Main()
             : base()
@@ -58,24 +202,36 @@ namespace SpaceFly
             Content.RootDirectory = "Content";
             graphics.PreferredBackBufferHeight = SCREENHEIGHT;
             graphics.PreferredBackBufferWidth = SCREENWIDTH;
+
+            //Make the mouse visible
+            this.IsMouseVisible = true;
         }
 
         protected override void Initialize()
         {
-            //Generate world
-            for (int x = 0; x < 118; x++)
+            fillWorldGrid();
+
+            //Set a random position outside asteroids
+            Vector2 randomPos = new Vector2(randomInt(0, 117), randomInt(0, 62));
+            while (true)
             {
-                for (int y = 0; y < 62; y++)
+                if (worldGrid[(int)randomPos.X, (int)randomPos.Y].destroyed == true)
                 {
-                    if (x > 30 + (rnd.Next(3)))
-                    {
-                        worldGrid[x, y] = new Rock(new Vector2(x * 16, y * 16), rnd.Next(5, 10), false);
-                    }
-                    else
-                    {
-                        worldGrid[x, y] = new Rock(new Vector2(x * 16, y * 16), 0, true);
-                    }
+                    position = new Vector2(randomPos.X * 16, randomPos.Y * 16);
+                    break;
                 }
+                else
+                {
+                    randomPos = new Vector2(randomInt(0, 117), randomInt(0, 62));
+                    continue;
+                }
+            }
+
+            //Generate world
+            int amountOfAsteroids = randomInt(15, 20);
+            for (int i = 0; i <= amountOfAsteroids; i++)
+            {
+                Generator();
             }
 
             base.Initialize();
@@ -86,10 +242,16 @@ namespace SpaceFly
             // Create a new SpriteBatch, which can be used to draw textures.
             spriteBatch = new SpriteBatch(GraphicsDevice);
 
+            //Load the pictures
             spaceshipPic = Content.Load<Texture2D>("Player_ship");
             starsPic = Content.Load<Texture2D>("stars");
             firePic = Content.Load<Texture2D>("fireball");
             rockPic = Content.Load<Texture2D>("rock");
+            rockPicdmg1 = Content.Load<Texture2D>("rockdmg1");
+            rockPicdmg2 = Content.Load<Texture2D>("rockdmg2");
+
+            //Load the font
+            font = Content.Load<SpriteFont>("font");
         }
 
         protected override void UnloadContent()
@@ -102,16 +264,16 @@ namespace SpaceFly
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            //rotate the sprite when the player presses A/D
-            if (Keyboard.GetState().IsKeyDown(Keys.A))
-            {
-                angle = angle - TURNSPEED;
-            }
-            else if (Keyboard.GetState().IsKeyDown(Keys.D))
-            {
-                angle = angle + TURNSPEED;
-            }
+
+            //Rotate the sprite relative to the mouse position
+            angle = Math.Asin((Mouse.GetState().Position.Y - position.Y) / (Math.Sqrt(Math.Pow(Mouse.GetState().Position.X - position.X, 2) + Math.Pow(Mouse.GetState().Position.Y - position.Y, 2))));
             
+           
+            if (Mouse.GetState().Position.X < position.X)
+            {
+                angle = Math.PI - angle;
+            }
+
             //Accelerate when W is pressed
             if (Keyboard.GetState().IsKeyDown(Keys.W))
             {
@@ -137,12 +299,27 @@ namespace SpaceFly
                 }
             }
 
+            //Reset and Reload the map when F5 is pressed
+            if (Keyboard.GetState().IsKeyUp(Keys.F5) && oldKeyboardState.IsKeyDown(Keys.F5))
+            {
+                worldGrid = new Rock[118, 62];
+                rockList = new List<Vector2>();
+
+                fillWorldGrid();
+
+                int amountOfAsteroids = randomInt(5, 15);
+                for (int i = 0; i <= amountOfAsteroids; i++)
+                {
+                    Generator();
+                }
+            }
+
             //Shoot when space is pressed
             if (Keyboard.GetState().IsKeyDown(Keys.Space))
             {
                 for (int i = 0; i <= 1; i++)
                 {
-                    fireList.Add(new Fireball(position, velocity, speed + 10, angle));
+                    fireList.Add(new Fireball(position, velocity, speed + 10, angle, bulletSpread));
                 }
             }
 
@@ -177,6 +354,16 @@ namespace SpaceFly
                 position.Y = 0;
             }
             
+            //Bullet spread
+            if (Mouse.GetState().ScrollWheelValue - oldMouseState.ScrollWheelValue < 0)
+            {
+                bulletSpread = Math.Pow(bulletSpread, 1.1);
+            }
+            else if (Mouse.GetState().ScrollWheelValue - oldMouseState.ScrollWheelValue > 0)
+            {
+                bulletSpread = Math.Pow(bulletSpread, 1.0 / 1.1);
+            }
+
             //Collisions between rocks and the player
             if ((int)position.X / 16 < 118 && (int)position.Y / 16 < 62)
             {
@@ -214,6 +401,9 @@ namespace SpaceFly
                 }
             }
 
+            oldKeyboardState = Keyboard.GetState();
+            oldMouseState = Mouse.GetState();
+
             base.Update(gameTime);
         }
 
@@ -242,19 +432,43 @@ namespace SpaceFly
             spriteBatch.Draw(spaceshipPic, position, sourceRectangleSpaceship, Color.White, (float)angle + (float)Math.PI / 2, origin, 1.0f, SpriteEffects.None, 1);
 
             
-            for (int x = 0; x < 118; x++)
+            for (int x = 0; x < worldGrid.GetLength(0); x++)
             {
-                for (int y = 0; y < 62; y++)
+                for (int y = 0; y < worldGrid.GetLength(1); y++)
                 {
                     worldGrid[x, y].Update();
 
                     if (worldGrid[x, y].destroyed == false)
                     {
-                        spriteBatch.Draw(rockPic, worldGrid[x, y].position, Color.Wheat);
+                        if (worldGrid[x, y].health > 8)
+                        {
+                            spriteBatch.Draw(rockPic, worldGrid[x, y].position, Color.White);
+                        }
+                        else if (worldGrid[x, y].health > 3 && worldGrid[x, y].health <= 7)
+                        {
+                            spriteBatch.Draw(rockPicdmg1, worldGrid[x, y].position, Color.White);
+                        }
+                        else if (worldGrid[x, y].health <= 3)
+                        {
+                            spriteBatch.Draw(rockPicdmg2, worldGrid[x, y].position, Color.White);
+                        }
+                        else
+                        {
+                            spriteBatch.Draw(rockPic, worldGrid[x, y].position, Color.White);
+                        }
                     }
                 }
             }
 
+            //Debug text
+            try
+            {
+                spriteBatch.DrawString(font, bulletSpread.ToString(), new Vector2(10, 12 * 0), Color.White);
+            }
+            catch (System.IndexOutOfRangeException)
+            {
+
+            }
             spriteBatch.End();
 
             base.Draw(gameTime);

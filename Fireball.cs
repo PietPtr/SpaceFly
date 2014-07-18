@@ -18,20 +18,29 @@ namespace SpaceFly
         public Vector2 velocity;
         public double speed;
         public double angle;
+        public double bulletSpread;
 
-        static Random rnd = new Random(500);
+        static Random random = new Random(500);
+
+        //Random integer method
+        public int randomInt(int low, int high)
+        {
+            int randomInteger = random.Next(low, high + 1);
+            return randomInteger;
+        }
 
         //Constructor
-        public Fireball(Vector2 position, Vector2 velocity, double speed, double angle)
+        public Fireball(Vector2 position, Vector2 velocity, double speed, double angle, double bulletSpread)
         {
             this.position = position;
             this.velocity = velocity;
             this.speed = speed;
             this.angle = angle;
+            this.bulletSpread = bulletSpread;
 
             //Randomize spread
-            this.velocity.X = this.velocity.X + (((float)rnd.NextDouble() - (float)0.5) / (float)10);
-            this.velocity.Y = this.velocity.Y + (((float)rnd.NextDouble() - (float)0.5) / (float)10);
+            this.velocity.X = this.velocity.X + (((float)random.NextDouble() - (float)0.5) / (float)bulletSpread);
+            this.velocity.Y = this.velocity.Y + (((float)random.NextDouble() - (float)0.5) / (float)bulletSpread);
         }
 
         public void Update() 
